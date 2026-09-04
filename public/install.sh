@@ -19,12 +19,12 @@ if [ -z "$CODE" ]; then
   exit 1
 fi
 
-# URLs are baked in at deploy time by scripts/build-bridge-tarball.sh
-APP_URL="${HANDHOLD_APP_URL:-https://placeholder.local}"
-RELAY_URL="${HANDHOLD_RELAY_URL:-https://placeholder-relay.local}"
+# URLs baked in at deploy time by scripts/build-bridge-tarball.sh via sed.
+APP_URL="${HANDHOLD_APP_URL:-https://handhold-lac.vercel.app}"
+RELAY_URL="${HANDHOLD_RELAY_URL:-https://handhold-relay.onrender.com}"
 BRIDGE_TARBALL="$APP_URL/bridge.tar.gz"
 
-if [[ "$APP_URL" == __* ]] || [[ "$RELAY_URL" == __* ]]; then
+if [[ "$APP_URL" == @@* ]] || [[ "$RELAY_URL" == @@* ]]; then
   echo "install.sh not built with production URLs baked in. Set HANDHOLD_APP_URL and HANDHOLD_RELAY_URL env vars, or fetch the built copy." >&2
   exit 1
 fi

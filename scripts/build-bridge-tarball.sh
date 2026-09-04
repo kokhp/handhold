@@ -45,7 +45,7 @@ EOF
 echo "→ wrote public/bridge.tar.gz ($(du -h public/bridge.tar.gz | awk '{print $1}'))"
 
 # Stamp install.sh with prod URLs (idempotent — restore placeholders after each build if desired)
-sed -e "s|__APP_URL__|$APP_URL|g" -e "s|__RELAY_URL__|$RELAY_URL|g" public/install.sh > public/install.sh.tmp
+sed -e "s|@@APP_URL@@|$APP_URL|g" -e "s|@@RELAY_URL@@|$RELAY_URL|g" public/install.sh > public/install.sh.tmp
 mv public/install.sh.tmp public/install.sh
 chmod +x public/install.sh
 echo "→ stamped public/install.sh with APP=$APP_URL RELAY=$RELAY_URL"
