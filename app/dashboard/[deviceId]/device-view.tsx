@@ -25,11 +25,11 @@ export function DeviceView({ deviceId, deviceName, paired }: { deviceId: string;
     "disconnected";
 
   return (
-    <div className="min-h-svh flex flex-col bg-neutral-950">
-      {/* Sticky header: stays visible while any tab content scrolls.
-          Labeled "‹ Macs" (distinct from the sub-header "‹ Projects" / "‹ Sessions"
-          inside tabs so users don't accidentally jump to the device list). */}
-      <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur pt-safe border-b border-neutral-900">
+    <div className="h-svh flex flex-col bg-neutral-950 overflow-hidden">
+      {/* Fixed viewport height so nested flex-1 min-h-0 scroll areas actually
+          scroll instead of pushing the whole page. Sticky header + bottom nav
+          are inside this bounded box. */}
+      <header className="flex-shrink-0 bg-neutral-950/95 backdrop-blur pt-safe border-b border-neutral-900">
         <div className="px-4 pt-2 pb-2 flex items-center gap-3">
           <Link href="/dashboard" className="text-neutral-400 hover:text-white text-sm px-2 py-1 -ml-2 rounded-md active:bg-neutral-800">
             ‹ Macs
@@ -62,7 +62,7 @@ export function DeviceView({ deviceId, deviceName, paired }: { deviceId: string;
         )}
       </div>
 
-      <nav className="sticky bottom-0 z-30 grid grid-cols-3 border-t border-neutral-900 bg-neutral-950/95 backdrop-blur pb-safe">
+      <nav className="flex-shrink-0 grid grid-cols-3 border-t border-neutral-900 bg-neutral-950/95 backdrop-blur pb-safe">
         {(["sessions", "terminals", "browser"] as Tab[]).map((t) => (
           <button
             key={t}
