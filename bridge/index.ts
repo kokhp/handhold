@@ -29,10 +29,22 @@ function saveConfig(cfg: Config) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), { mode: 0o600 });
 }
 
+function friendlyMacName(): string {
+  // scutil --get ComputerName returns "Himanshu's MacBook Pro"; falls back to
+  // os.hostname() which on some networks is the IP or a mDNS ".local" name.
+  try {
+    const out = require("node:child_process").execFileSync("/usr/sbin/scutil", ["--get", "ComputerName"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 1000,
+    }).trim();
+    if (out) return out;
+  } catch {}
+  return os.hostname();
+}
+
 async function cmdPair(code: string) {
   if (!code) { console.error("usage: handhold pair <CODE>"); process.exit(1); }
   const cfg = loadConfig();
-  const hostname = os.hostname();
+  const hostname = friendlyMacName();
   // Claim is an HTTP request against the Next.js app (Vercel), not the WS relay.
   const claimUrl = `${cfg.appUrl ?? cfg.relayUrl}/api/devices/claim`;
   const res = await fetch(claimUrl, {

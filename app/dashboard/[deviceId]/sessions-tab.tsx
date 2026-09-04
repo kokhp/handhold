@@ -87,10 +87,12 @@ function ProjectSessions({ bridge, project, onBack, onOpen }: { bridge: Bridge; 
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="sticky top-0 z-10 bg-neutral-950/95 backdrop-blur px-4 py-2 text-xs text-neutral-500 border-b border-neutral-900 flex items-center gap-3">
-        <button onClick={onBack} className="text-neutral-200 -ml-1 px-1">‹ Projects</button>
-        <span className="truncate flex-1">{trimCwd(project.cwd)}</span>
-        <button onClick={() => setShowAll(!showAll)} className="text-neutral-400 underline underline-offset-4">
+      <div className="sticky top-0 z-10 bg-neutral-950/95 backdrop-blur border-b border-neutral-900 flex items-stretch">
+        <button onClick={onBack} className="text-neutral-200 px-4 py-3 hover:bg-neutral-900 active:bg-neutral-800 flex items-center text-sm font-medium">
+          ‹ Projects
+        </button>
+        <span className="text-xs text-neutral-300 truncate flex-1 py-3 pr-2 flex items-center">{trimCwd(project.cwd)}</span>
+        <button onClick={() => setShowAll(!showAll)} className="text-xs text-neutral-400 hover:text-neutral-100 px-3 py-3 hover:bg-neutral-900">
           {showAll ? "live only" : "show all"}
         </button>
       </div>
@@ -186,33 +188,31 @@ function SessionView({ bridge, project, session, onBack }: { bridge: Bridge; pro
     return () => unsub();
   }, [project.id, session.id]);
 
-  // 2. Scroll to bottom after initial paint. Observing scrollHeight is the
-  //    reliable way — raf timing races because tool-result <pre> blocks lay out
-  //    lazily, so scrollHeight keeps growing after mount. We stick to bottom
-  //    for up to 1s while content settles, then release.
+  // 2. Scroll to bottom after initial paint. Poll scrollHeight every 60ms for
+  //    2s — tool-result <pre> blocks lay out lazily so scrollHeight keeps
+  //    growing after mount; pin to bottom whenever it grows.
   useEffect(() => {
     if (!loaded) return;
     const el = scrollRef.current;
     if (!el) return;
-    let cancelled = false;
-    let observer: ResizeObserver | null = null;
-    // Force scroll immediately, then repeatedly for ~1s to catch layout shifts.
-    const pin = () => { if (!cancelled && el) el.scrollTop = el.scrollHeight; };
+    stickToBottomRef.current = true;
+    let lastH = -1;
+    const pin = () => {
+      if (!scrollRef.current) return;
+      const cur = scrollRef.current;
+      if (cur.scrollHeight !== lastH) {
+        lastH = cur.scrollHeight;
+        cur.scrollTop = cur.scrollHeight;
+      }
+    };
     pin();
     const rafId = requestAnimationFrame(pin);
-    const timer = setTimeout(pin, 100);
-    const timer2 = setTimeout(pin, 400);
-    if (typeof ResizeObserver !== "undefined") {
-      observer = new ResizeObserver(() => { if (stickToBottomRef.current) pin(); });
-      observer.observe(el);
-    }
-    const release = setTimeout(() => { stickToBottomRef.current = true; }, 50);
-    const stopObs = setTimeout(() => { observer?.disconnect(); observer = null; }, 1200);
+    const interval = setInterval(pin, 60);
+    const stop = setTimeout(() => clearInterval(interval), 2000);
     return () => {
-      cancelled = true;
       cancelAnimationFrame(rafId);
-      clearTimeout(timer); clearTimeout(timer2); clearTimeout(release); clearTimeout(stopObs);
-      observer?.disconnect();
+      clearInterval(interval);
+      clearTimeout(stop);
     };
   }, [loaded]);
 
@@ -297,14 +297,16 @@ function SessionView({ bridge, project, session, onBack }: { bridge: Bridge; pro
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="sticky top-0 z-10 bg-neutral-950/95 backdrop-blur px-4 py-2 text-xs text-neutral-500 border-b border-neutral-900 flex items-center gap-3">
-        <button onClick={onBack} className="text-neutral-200 -ml-1 px-1">‹ Sessions</button>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-neutral-300">{session.title}</p>
+      <div className="sticky top-0 z-10 bg-neutral-950/95 backdrop-blur border-b border-neutral-900 flex items-stretch">
+        <button onClick={onBack} className="text-neutral-200 px-4 py-3 hover:bg-neutral-900 active:bg-neutral-800 flex items-center text-sm font-medium">
+          ‹ Sessions
+        </button>
+        <div className="min-w-0 flex-1 py-2 pr-3">
+          <p className="text-xs text-neutral-300 line-clamp-2">{session.title}</p>
           <p className="text-[10px] text-neutral-600 truncate">
             {session.active ? "live" : "closed"}
             {session.tty ? ` · ${session.tty}` : ""}
-            {loaded ? ` · showing ${startIndex + 1}–${endIndex} of ${total}` : ""}
+            {loaded ? ` · ${startIndex + 1}–${endIndex} of ${total}` : ""}
           </p>
         </div>
       </div>
