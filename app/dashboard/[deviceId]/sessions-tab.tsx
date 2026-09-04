@@ -140,6 +140,7 @@ function SessionView({ bridge, project, session, onBack }: { bridge: Bridge; pro
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const preserveScrollRef = useRef<null | { prevScrollHeight: number; prevScrollTop: number }>(null);
 
@@ -188,32 +189,20 @@ function SessionView({ bridge, project, session, onBack }: { bridge: Bridge; pro
     return () => unsub();
   }, [project.id, session.id]);
 
-  // 2. Scroll to bottom after initial paint. Poll scrollHeight every 60ms for
-  //    2s — tool-result <pre> blocks lay out lazily so scrollHeight keeps
-  //    growing after mount; pin to bottom whenever it grows.
+  // 2. Scroll to bottom on initial load. Use a bottom anchor + scrollIntoView
+  //    (browser-native, no scrollHeight race). Fire on multiple frames because
+  //    tool-result <pre> blocks lay out lazily and shift heights after mount.
   useEffect(() => {
     if (!loaded) return;
-    const el = scrollRef.current;
-    if (!el) return;
     stickToBottomRef.current = true;
-    let lastH = -1;
-    const pin = () => {
-      if (!scrollRef.current) return;
-      const cur = scrollRef.current;
-      if (cur.scrollHeight !== lastH) {
-        lastH = cur.scrollHeight;
-        cur.scrollTop = cur.scrollHeight;
-      }
+    let cancelled = false;
+    const jump = () => {
+      if (cancelled) return;
+      bottomAnchorRef.current?.scrollIntoView({ block: "end" });
     };
-    pin();
-    const rafId = requestAnimationFrame(pin);
-    const interval = setInterval(pin, 60);
-    const stop = setTimeout(() => clearInterval(interval), 2000);
-    return () => {
-      cancelAnimationFrame(rafId);
-      clearInterval(interval);
-      clearTimeout(stop);
-    };
+    jump();
+    const timers = [50, 150, 300, 600, 1000, 1600].map((ms) => setTimeout(jump, ms));
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
   }, [loaded]);
 
   // 3. Auto-scroll on tail chunks IF user was already near bottom.
@@ -326,6 +315,7 @@ function SessionView({ bridge, project, session, onBack }: { bridge: Bridge; pro
           </div>
         )}
         {msgs.map((m, i) => <MessageRow key={`${startIndex + i}`} m={m} />)}
+        <div ref={bottomAnchorRef} aria-hidden />
       </div>
 
       <form
