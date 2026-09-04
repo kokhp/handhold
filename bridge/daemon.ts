@@ -214,6 +214,14 @@ export function runDaemon() {
 
   connect();
 
+  // Keep Render's free-tier container warm so mobile WS never has to hit a cold
+  // start. Ping /health on the relay every 10 min; Render's spin-down threshold
+  // is 15 min of no HTTP traffic (WS alone doesn't count as activity there).
+  const relayHttpUrl = cfg.relayUrl.replace(/^ws/, "http");
+  setInterval(() => {
+    fetch(`${relayHttpUrl}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
+  }, 10 * 60 * 1000);
+
   const shutdown = () => {
     closedForever = true;
     for (const t of tails.values()) t.stop();
