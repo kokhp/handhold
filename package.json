@@ -1,0 +1,45 @@
+{
+  "name": "handhold",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx --env-file-if-exists=.env.local --env-file-if-exists=.env server.ts",
+    "dev:next": "next dev",
+    "build": "next build",
+    "start": "NODE_ENV=production tsx --env-file-if-exists=.env server.ts",
+    "bridge": "tsx bridge/index.ts",
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-auth": "^1.7.1",
+    "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.10",
+    "nanoid": "^6.0.1",
+    "next": "16.3.2",
+    "pg": "^8.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "ws": "^8.21.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.2",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.12",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@11.7.0"
+}

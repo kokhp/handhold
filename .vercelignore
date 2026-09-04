@@ -1,0 +1,8 @@
+relay/
+Dockerfile.relay
+fly.toml
+server.ts
+bridge/
+scripts/build-bridge-tarball.sh
+.env.local
+.env.production

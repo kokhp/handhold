@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.env.local
+.env
+bridge/node_modules
+tests
+*.log
+.DS_Store

@@ -1,0 +1,21 @@
+# Render Blueprint for the handhold WebSocket relay.
+# After pushing this repo to GitHub, go to Render → New Blueprint → connect the repo.
+# Render will create the service below and prompt for the two sync=false secrets.
+
+services:
+  - type: web
+    name: handhold-relay
+    runtime: docker
+    dockerfilePath: ./Dockerfile.relay
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: NODE_ENV
+        value: "production"
+      - key: DATABASE_URL
+        sync: false   # paste in Render dashboard on first setup
+      - key: WS_TICKET_SECRET
+        sync: false   # paste in Render dashboard on first setup (SAME value as Vercel)

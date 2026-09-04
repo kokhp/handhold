@@ -1,0 +1,109 @@
+#!/usr/bin/env -S node --experimental-strip-types --no-warnings
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { cmdInstallAgent, cmdUninstallAgent, cmdAgentStatus, cmdRestartAgent, cmdLogs } from "./agent.ts";
+import { runDaemon } from "./daemon.ts";
+
+const HOME = os.homedir();
+const CONFIG_DIR = path.join(HOME, ".handhold");
+const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
+const DEFAULT_RELAY = process.env.HANDHOLD_RELAY ?? "http://localhost:3000";
+
+type Config = { relayUrl: string; deviceId?: string; deviceToken?: string; deviceName?: string };
+
+function loadConfig(): Config {
+  if (!fs.existsSync(CONFIG_PATH)) return { relayUrl: DEFAULT_RELAY };
+  try { return { relayUrl: DEFAULT_RELAY, ...JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) }; }
+  catch { return { relayUrl: DEFAULT_RELAY }; }
+}
+
+function saveConfig(cfg: Config) {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+}
+
+async function cmdPair(code: string) {
+  if (!code) { console.error("usage: handhold pair <CODE>"); process.exit(1); }
+  const cfg = loadConfig();
+  const hostname = os.hostname();
+  const res = await fetch(`${cfg.relayUrl}/api/devices/claim`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: code.trim().toUpperCase(), hostname }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`pair failed [${res.status}]: ${body}`);
+    process.exit(1);
+  }
+  const data = (await res.json()) as { deviceId: string; deviceToken: string; name: string };
+  saveConfig({
+    relayUrl: cfg.relayUrl,
+    deviceId: data.deviceId,
+    deviceToken: data.deviceToken,
+    deviceName: data.name,
+  });
+  console.log(`✓ paired as "${data.name}" (device ${data.deviceId})`);
+  console.log(`  config saved to ${CONFIG_PATH}`);
+  console.log(`  install as background agent: handhold install-agent`);
+}
+
+function cmdStatus() {
+  const cfg = loadConfig();
+  console.log(JSON.stringify(
+    {
+      configPath: CONFIG_PATH,
+      relayUrl: cfg.relayUrl,
+      deviceId: cfg.deviceId ?? null,
+      deviceName: cfg.deviceName ?? null,
+      paired: !!cfg.deviceToken,
+    },
+    null,
+    2,
+  ));
+}
+
+function cmdUnpair() {
+  if (fs.existsSync(CONFIG_PATH)) fs.unlinkSync(CONFIG_PATH);
+  console.log("✓ config removed. re-pair with: handhold pair <CODE>");
+}
+
+function usage() {
+  console.log(`handhold bridge
+
+pairing:
+  handhold pair <CODE>       claim a pairing code from the web dashboard
+  handhold status            show config
+  handhold unpair            forget saved token
+
+running:
+  handhold run               start the bridge in foreground (Ctrl-C to stop)
+  handhold install-agent     install as launchd LaunchAgent (survives terminal close)
+  handhold uninstall-agent   stop and remove the LaunchAgent
+  handhold restart-agent     force-restart the LaunchAgent
+  handhold agent-status      show LaunchAgent state
+  handhold logs [N]          tail N lines of the daemon log (default 100)
+
+env:
+  HANDHOLD_RELAY             relay URL (default ${DEFAULT_RELAY})
+  CMUX_SOCKET_PASSWORD       cmux socket password if socket is in password mode
+                              (also loaded from ~/.claude/env/cmux.env at startup)
+`);
+}
+
+const [, , sub, ...rest] = process.argv;
+switch (sub) {
+  case "pair":            await cmdPair(rest[0] ?? ""); break;
+  case "run":             runDaemon(); break;
+  case "status":          cmdStatus(); break;
+  case "unpair":          cmdUnpair(); break;
+  case "install-agent":   cmdInstallAgent(); break;
+  case "uninstall-agent": cmdUninstallAgent(); break;
+  case "restart-agent":   cmdRestartAgent(); break;
+  case "agent-status":    cmdAgentStatus(); break;
+  case "logs":            cmdLogs(Number(rest[0] ?? "100")); break;
+  default:
+    usage();
+    process.exit(sub ? 1 : 0);
+}

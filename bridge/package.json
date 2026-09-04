@@ -1,0 +1,18 @@
+{
+  "name": "handhold-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "handhold": "./index.ts"
+  },
+  "type": "module",
+  "dependencies": {
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top), 1rem);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
