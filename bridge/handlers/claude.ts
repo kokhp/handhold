@@ -11,12 +11,14 @@ const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 // underlying cwd always starts with `/Users/` on macOS, so we walk directories
 // from HOME to find the actual path that could have produced this id.
 function decodeProjectPath(dirName: string): string {
-  // Try a smart decode by walking the real filesystem.
-  const parts = dirName.split("-").filter(Boolean); // drop leading empty from "-Users-..."
+  // Walk the real filesystem to disambiguate "dashes-in-a-segment" from
+  // "dashes-as-separators". Prefer LONGER segment matches so a project like
+  // "gyb-agentos-clone" wins over a coincidental "gyb" directory.
+  const parts = dirName.split("-").filter(Boolean);
   const home = os.homedir();
   const search = (segments: string[], cur: string): string | null => {
     if (segments.length === 0) return cur;
-    for (let take = 1; take <= segments.length; take++) {
+    for (let take = segments.length; take >= 1; take--) {
       const candidate = segments.slice(0, take).join("-");
       const next = path.join(cur, candidate);
       try {
@@ -29,12 +31,10 @@ function decodeProjectPath(dirName: string): string {
     }
     return null;
   };
-  // Ignore leading "Users" + "<username>" prefix by anchoring to home.
   if (parts.length >= 2 && parts[0] === "Users") {
     const anchored = search(parts.slice(2), home);
     if (anchored) return anchored;
   }
-  // Fallback: naive replace (may join real segments incorrectly but at least readable).
   return "/" + parts.join("/");
 }
 

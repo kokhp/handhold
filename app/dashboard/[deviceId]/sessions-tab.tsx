@@ -186,20 +186,34 @@ function SessionView({ bridge, project, session, onBack }: { bridge: Bridge; pro
     return () => unsub();
   }, [project.id, session.id]);
 
-  // 2. Scroll to bottom after initial paint (double raf handles content
-  //    heights not being final until paint). Only fires on first load.
+  // 2. Scroll to bottom after initial paint. Observing scrollHeight is the
+  //    reliable way — raf timing races because tool-result <pre> blocks lay out
+  //    lazily, so scrollHeight keeps growing after mount. We stick to bottom
+  //    for up to 1s while content settles, then release.
   useEffect(() => {
     if (!loaded) return;
     const el = scrollRef.current;
     if (!el) return;
-    let raf1: number, raf2: number;
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-        stickToBottomRef.current = true;
-      });
-    });
-    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+    let cancelled = false;
+    let observer: ResizeObserver | null = null;
+    // Force scroll immediately, then repeatedly for ~1s to catch layout shifts.
+    const pin = () => { if (!cancelled && el) el.scrollTop = el.scrollHeight; };
+    pin();
+    const rafId = requestAnimationFrame(pin);
+    const timer = setTimeout(pin, 100);
+    const timer2 = setTimeout(pin, 400);
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => { if (stickToBottomRef.current) pin(); });
+      observer.observe(el);
+    }
+    const release = setTimeout(() => { stickToBottomRef.current = true; }, 50);
+    const stopObs = setTimeout(() => { observer?.disconnect(); observer = null; }, 1200);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      clearTimeout(timer); clearTimeout(timer2); clearTimeout(release); clearTimeout(stopObs);
+      observer?.disconnect();
+    };
   }, [loaded]);
 
   // 3. Auto-scroll on tail chunks IF user was already near bottom.

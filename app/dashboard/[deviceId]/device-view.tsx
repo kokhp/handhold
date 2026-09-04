@@ -26,10 +26,14 @@ export function DeviceView({ deviceId, deviceName, paired }: { deviceId: string;
 
   return (
     <div className="min-h-svh flex flex-col bg-neutral-950">
-      {/* Sticky header: stays visible while any tab content scrolls */}
+      {/* Sticky header: stays visible while any tab content scrolls.
+          Labeled "‹ Macs" (distinct from the sub-header "‹ Projects" / "‹ Sessions"
+          inside tabs so users don't accidentally jump to the device list). */}
       <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur pt-safe border-b border-neutral-900">
         <div className="px-4 pt-2 pb-2 flex items-center gap-3">
-          <Link href="/dashboard" className="text-neutral-300 hover:text-white text-2xl leading-none px-1 -ml-1">‹</Link>
+          <Link href="/dashboard" className="text-neutral-400 hover:text-white text-sm px-2 py-1 -ml-2 rounded-md active:bg-neutral-800">
+            ‹ Macs
+          </Link>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-widest text-neutral-500">Mac</p>
             <h1 className="text-base font-semibold truncate">{deviceName}</h1>
