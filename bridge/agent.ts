@@ -4,11 +4,14 @@ import os from "node:os";
 import path from "node:path";
 
 const LABEL = "com.handhold.bridge";
+const KEEPER_LABEL = "com.handhold.keeper";
 const HOME = os.homedir();
 const PLIST_PATH = path.join(HOME, "Library", "LaunchAgents", `${LABEL}.plist`);
+const KEEPER_PLIST_PATH = path.join(HOME, "Library", "LaunchAgents", `${KEEPER_LABEL}.plist`);
 const LOG_DIR = path.join(HOME, "Library", "Logs");
 const LOG_OUT = path.join(LOG_DIR, "handhold-bridge.log");
 const LOG_ERR = path.join(LOG_DIR, "handhold-bridge.err.log");
+const KEEPER_LOG = path.join(LOG_DIR, "handhold-keeper.log");
 const BRIDGE_ENTRY = path.resolve(new URL(".", import.meta.url).pathname, "index.ts");
 
 function domainTarget() {
@@ -16,8 +19,39 @@ function domainTarget() {
   return `gui/${uid}`;
 }
 
-function serviceTarget() {
-  return `${domainTarget()}/${LABEL}`;
+function serviceTarget(label = LABEL) {
+  return `${domainTarget()}/${label}`;
+}
+
+function writeKeeperPlist(relayUrl: string) {
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${KEEPER_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/curl</string>
+    <string>-fsSL</string>
+    <string>-o</string>
+    <string>/dev/null</string>
+    <string>-m</string>
+    <string>25</string>
+    <string>${relayUrl}/health</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${KEEPER_LOG}</string>
+  <key>StandardErrorPath</key>
+  <string>${KEEPER_LOG}</string>
+</dict>
+</plist>
+`;
+  fs.writeFileSync(KEEPER_PLIST_PATH, plist, { mode: 0o644 });
 }
 
 function writePlist(relayUrl: string, appUrl: string) {
@@ -83,37 +117,47 @@ export function cmdInstallAgent() {
   const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
   const relayUrl: string = cfg.relayUrl ?? "http://localhost:3000";
   const appUrl: string = cfg.appUrl ?? relayUrl;
+
+  // 1. Main bridge agent
   writePlist(relayUrl, appUrl);
   console.log(`✓ wrote ${PLIST_PATH}`);
-  // Idempotent stop then bootstrap so re-install applies updated plist.
   launchctl(["bootout", serviceTarget()]);
   const boot = launchctl(["bootstrap", domainTarget(), PLIST_PATH]);
   if (!boot.ok) {
-    console.error(`launchctl bootstrap failed:\n${boot.out}`);
+    console.error(`launchctl bootstrap (bridge) failed:\n${boot.out}`);
     process.exit(1);
   }
-  const kick = launchctl(["kickstart", "-k", serviceTarget()]);
-  if (!kick.ok) {
-    console.error(`launchctl kickstart failed:\n${kick.out}`);
-    process.exit(1);
+  launchctl(["kickstart", "-k", serviceTarget()]);
+
+  // 2. Keeper agent — periodic curl to keep Render's free tier warm.
+  //    Runs every 10 min, RunAtLoad = fires at Mac boot too.
+  writeKeeperPlist(relayUrl);
+  console.log(`✓ wrote ${KEEPER_PLIST_PATH}`);
+  launchctl(["bootout", serviceTarget(KEEPER_LABEL)]);
+  const bootKeeper = launchctl(["bootstrap", domainTarget(), KEEPER_PLIST_PATH]);
+  if (!bootKeeper.ok) {
+    console.error(`launchctl bootstrap (keeper) failed:\n${bootKeeper.out}`);
+    // non-fatal
   }
-  console.log(`✓ agent installed and running (${LABEL})`);
+
+  console.log(`✓ agents installed:`);
+  console.log(`  bridge (${LABEL})   — persistent WS to relay`);
+  console.log(`  keeper (${KEEPER_LABEL}) — pings ${relayUrl}/health every 10 min`);
   console.log(`  relay: ${relayUrl}`);
   console.log(`  logs:  ${LOG_OUT}`);
   console.log(`  stop:  handhold uninstall-agent`);
 }
 
 export function cmdUninstallAgent() {
-  const r = launchctl(["bootout", serviceTarget()]);
-  if (!r.ok && !r.out.includes("Could not find")) {
-    console.error(`launchctl bootout failed:\n${r.out}`);
-    // continue anyway to remove plist
+  launchctl(["bootout", serviceTarget()]);
+  launchctl(["bootout", serviceTarget(KEEPER_LABEL)]);
+  for (const p of [PLIST_PATH, KEEPER_PLIST_PATH]) {
+    if (fs.existsSync(p)) {
+      fs.unlinkSync(p);
+      console.log(`✓ removed ${p}`);
+    }
   }
-  if (fs.existsSync(PLIST_PATH)) {
-    fs.unlinkSync(PLIST_PATH);
-    console.log(`✓ removed ${PLIST_PATH}`);
-  }
-  console.log(`✓ agent stopped and uninstalled`);
+  console.log(`✓ agents stopped and uninstalled`);
 }
 
 export function cmdAgentStatus() {
