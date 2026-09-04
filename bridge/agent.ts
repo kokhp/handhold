@@ -20,7 +20,7 @@ function serviceTarget() {
   return `${domainTarget()}/${LABEL}`;
 }
 
-function writePlist(relayUrl: string) {
+function writePlist(relayUrl: string, appUrl: string) {
   fs.mkdirSync(path.dirname(PLIST_PATH), { recursive: true });
   fs.mkdirSync(LOG_DIR, { recursive: true });
   const nodePath = process.execPath;
@@ -42,6 +42,8 @@ function writePlist(relayUrl: string) {
   <dict>
     <key>HANDHOLD_RELAY</key>
     <string>${relayUrl}</string>
+    <key>HANDHOLD_APP_URL</key>
+    <string>${appUrl}</string>
     <key>PATH</key>
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>HOME</key>
@@ -80,7 +82,8 @@ export function cmdInstallAgent() {
   }
   const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
   const relayUrl: string = cfg.relayUrl ?? "http://localhost:3000";
-  writePlist(relayUrl);
+  const appUrl: string = cfg.appUrl ?? relayUrl;
+  writePlist(relayUrl, appUrl);
   console.log(`✓ wrote ${PLIST_PATH}`);
   // Idempotent stop then bootstrap so re-install applies updated plist.
   launchctl(["bootout", serviceTarget()]);

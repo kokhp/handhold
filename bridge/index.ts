@@ -8,14 +8,20 @@ import { runDaemon } from "./daemon.ts";
 const HOME = os.homedir();
 const CONFIG_DIR = path.join(HOME, ".handhold");
 const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
+// The HTTP API (Vercel-hosted Next.js). Handles pairing.
+const DEFAULT_APP_URL = process.env.HANDHOLD_APP_URL ?? process.env.HANDHOLD_RELAY ?? "http://localhost:3000";
+// The WebSocket relay (Render-hosted). Handles bridge<->mobile message forwarding.
 const DEFAULT_RELAY = process.env.HANDHOLD_RELAY ?? "http://localhost:3000";
 
-type Config = { relayUrl: string; deviceId?: string; deviceToken?: string; deviceName?: string };
+type Config = { relayUrl: string; appUrl?: string; deviceId?: string; deviceToken?: string; deviceName?: string };
 
 function loadConfig(): Config {
-  if (!fs.existsSync(CONFIG_PATH)) return { relayUrl: DEFAULT_RELAY };
-  try { return { relayUrl: DEFAULT_RELAY, ...JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) }; }
-  catch { return { relayUrl: DEFAULT_RELAY }; }
+  if (!fs.existsSync(CONFIG_PATH)) return { relayUrl: DEFAULT_RELAY, appUrl: DEFAULT_APP_URL };
+  try {
+    const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+    return { relayUrl: DEFAULT_RELAY, appUrl: DEFAULT_APP_URL, ...saved };
+  }
+  catch { return { relayUrl: DEFAULT_RELAY, appUrl: DEFAULT_APP_URL }; }
 }
 
 function saveConfig(cfg: Config) {
@@ -27,7 +33,9 @@ async function cmdPair(code: string) {
   if (!code) { console.error("usage: handhold pair <CODE>"); process.exit(1); }
   const cfg = loadConfig();
   const hostname = os.hostname();
-  const res = await fetch(`${cfg.relayUrl}/api/devices/claim`, {
+  // Claim is an HTTP request against the Next.js app (Vercel), not the WS relay.
+  const claimUrl = `${cfg.appUrl ?? cfg.relayUrl}/api/devices/claim`;
+  const res = await fetch(claimUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: code.trim().toUpperCase(), hostname }),
@@ -40,6 +48,7 @@ async function cmdPair(code: string) {
   const data = (await res.json()) as { deviceId: string; deviceToken: string; name: string };
   saveConfig({
     relayUrl: cfg.relayUrl,
+    appUrl: cfg.appUrl,
     deviceId: data.deviceId,
     deviceToken: data.deviceToken,
     deviceName: data.name,

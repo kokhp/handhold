@@ -51,10 +51,10 @@ echo "→ installing runtime deps"
 BRIDGE="node --experimental-strip-types --no-warnings $DEST/index.ts"
 
 echo "→ pairing with code $CODE"
-HANDHOLD_RELAY="$RELAY_URL" $BRIDGE pair "$CODE"
+HANDHOLD_APP_URL="$APP_URL" HANDHOLD_RELAY="$RELAY_URL" $BRIDGE pair "$CODE"
 
 echo "→ installing background agent"
-HANDHOLD_RELAY="$RELAY_URL" $BRIDGE install-agent
+HANDHOLD_APP_URL="$APP_URL" HANDHOLD_RELAY="$RELAY_URL" $BRIDGE install-agent
 
 echo ""
 echo "✓ done. your Mac is paired and the bridge is running under launchd."
