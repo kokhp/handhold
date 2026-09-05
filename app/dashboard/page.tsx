@@ -29,21 +29,30 @@ export default async function DashboardPage() {
     paired: !!r.tokenHash,
   }));
 
+  const firstName = session.user.name.split(" ")[0];
+
   return (
-    <main className="min-h-svh px-6 pt-safe pb-safe">
+    <main className="relative min-h-svh px-5 pt-safe pb-safe bg-brand-wash">
       <div className="mx-auto max-w-md">
-        <header className="flex items-center justify-between py-6">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-neutral-500">handhold</p>
-            <h1 className="text-xl font-semibold">Hi, {session.user.name.split(" ")[0]}</h1>
+        <header className="flex items-center justify-between pt-3 pb-6">
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-sky-400/80">
+              handhold
+            </p>
+            <h1 className="mt-0.5 text-2xl font-semibold tracking-tight truncate">
+              Hi, {firstName}
+            </h1>
           </div>
           <SignOutButton />
         </header>
 
         <DevicesPanel initialDevices={initialDevices} />
 
-        <div className="mt-8 text-xs text-neutral-600 text-center">
-          Signed in as {session.user.email} · session expires {new Date(session.session.expiresAt).toISOString().slice(0, 10)}
+        <div className="mt-10 pt-6 border-t border-neutral-900/80 text-[11px] text-neutral-600 text-center leading-relaxed">
+          <p className="truncate">{session.user.email}</p>
+          <p className="mt-0.5">
+            Session expires {new Date(session.session.expiresAt).toISOString().slice(0, 10)}
+          </p>
         </div>
       </div>
     </main>

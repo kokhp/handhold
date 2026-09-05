@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Loader2, LogOut } from "lucide-react";
 import { signOut } from "@/lib/auth-client";
 
 export function SignOutButton() {
@@ -17,9 +18,10 @@ export function SignOutButton() {
     <button
       onClick={handle}
       disabled={busy}
-      className="text-sm text-neutral-400 hover:text-neutral-100 disabled:opacity-50"
+      aria-label="Sign out"
+      className="inline-flex items-center justify-center size-10 rounded-full border border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:text-neutral-100 hover:border-neutral-700 disabled:opacity-50 active:scale-95 transition"
     >
-      {busy ? "…" : "Sign out"}
+      {busy ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
     </button>
   );
 }

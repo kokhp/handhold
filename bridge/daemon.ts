@@ -180,6 +180,8 @@ export function runDaemon() {
     }
   }
 
+  let heartbeat: NodeJS.Timeout | null = null;
+
   function connect() {
     console.error(`[bridge] connecting to ${url}`);
     ws = new WebSocket(url, { headers: { Authorization: `Bearer ${cfg.deviceToken}` } });
@@ -188,6 +190,18 @@ export function runDaemon() {
       console.error(`[bridge] connected as ${cfg.deviceName ?? cfg.deviceId}`);
       backoff = 1_000;
       send({ type: "ping", payload: { hostname: os.hostname() } });
+      // Native WS ping every 25s — Cloudflare / Render / most proxies drop idle
+      // WebSockets after 30-60s. This keeps the TCP alive across their timers.
+      if (heartbeat) clearInterval(heartbeat);
+      heartbeat = setInterval(() => {
+        if (ws && ws.readyState === ws.OPEN) {
+          try { ws.ping(); } catch {}
+        }
+      }, 25_000);
+    });
+
+    ws.on("pong", () => {
+      // relay responded to our native ping; nothing to do, TCP stays alive
     });
 
     ws.on("message", (raw) => {
@@ -199,6 +213,7 @@ export function runDaemon() {
 
     ws.on("close", (code) => {
       console.error(`[bridge] closed code=${code}, reconnecting in ${backoff}ms`);
+      if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
       // Kill all tails on disconnect; mobile will re-request on reconnect.
       for (const t of tails.values()) t.stop();
       tails.clear();

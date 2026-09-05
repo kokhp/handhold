@@ -1,7 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ChevronRight,
+  Copy,
+  Loader2,
+  Monitor,
+  Plus,
+  Terminal,
+  Trash2,
+  X,
+} from "lucide-react";
 
 // Stable format on server + client to avoid hydration mismatch from toLocaleString.
 function formatWhen(iso: string): string {
@@ -12,6 +22,27 @@ function formatWhen(iso: string): string {
   const h = String(d.getUTCHours()).padStart(2, "0");
   const min = String(d.getUTCMinutes()).padStart(2, "0");
   return `${y}-${m}-${day} ${h}:${min} UTC`;
+}
+
+// Client-only relative time. Avoids SSR hydration mismatch by returning a stable
+// placeholder until mounted.
+function useRelative(iso: string | null): string {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  if (!iso || now === null) return "";
+  const diff = Math.max(0, now - new Date(iso).getTime());
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }
 
 type Device = {
@@ -102,44 +133,42 @@ export function DevicesPanel({ initialDevices }: { initialDevices: Device[] }) {
     if (res.ok) refresh();
   }
 
-  return (
-    <section className="mt-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm uppercase tracking-widest text-neutral-500">Your Macs</h2>
-        <button
-          onClick={startPair}
-          disabled={pairBusy}
-          className="rounded-lg bg-white text-black text-sm font-medium py-2 px-3 disabled:opacity-50"
-        >
-          {pairBusy ? "…" : "Pair a Mac"}
-        </button>
-      </div>
+  const hasDevices = devices.length > 0;
 
-      {devices.length === 0 && !pairing && (
-        <div className="rounded-2xl border border-dashed border-neutral-800 p-6 text-center">
-          <div className="text-4xl mb-3">🖥️</div>
-          <p className="text-sm text-neutral-500">No Macs paired yet. Tap "Pair a Mac" above.</p>
+  return (
+    <section className="space-y-4">
+      {hasDevices && (
+        <div className="flex items-center justify-between">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.18em] text-neutral-500">
+            Your Macs
+          </h2>
+          <button
+            onClick={startPair}
+            disabled={pairBusy}
+            className="inline-flex items-center gap-1.5 rounded-full bg-white text-black text-xs font-semibold py-1.5 pl-2.5 pr-3 disabled:opacity-50 active:scale-95 transition"
+          >
+            {pairBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" strokeWidth={2.5} />}
+            Pair
+          </button>
         </div>
       )}
 
-      <ul className="space-y-2">
-        {devices.map((d) => (
-          <li key={d.id} className="rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center">
-            <Link href={`/dashboard/${d.id}`} className="flex-1 min-w-0 p-4 active:bg-neutral-800/50 rounded-l-2xl">
-              <div className="flex items-center gap-2">
-                <span className={`inline-block size-2 rounded-full ${onlineIds.has(d.id) ? "bg-emerald-400 shadow-[0_0_8px] shadow-emerald-400/50" : "bg-neutral-600"}`} />
-                <p className="font-medium truncate">{d.name}</p>
-              </div>
-              <p className="mt-0.5 text-xs text-neutral-500 truncate">
-                {d.paired ? (onlineIds.has(d.id) ? "online" : d.lastSeenAt ? `last seen ${formatWhen(d.lastSeenAt)}` : "offline") : "waiting for pair"}
-              </p>
-            </Link>
-            <button onClick={() => unpair(d.id)} className="text-xs text-neutral-500 hover:text-red-400 px-4 py-4">
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
+      {!hasDevices && !pairing && (
+        <EmptyHero onPair={startPair} busy={pairBusy} />
+      )}
+
+      {hasDevices && (
+        <ul className="space-y-2.5">
+          {devices.map((d) => (
+            <DeviceRow
+              key={d.id}
+              device={d}
+              online={onlineIds.has(d.id)}
+              onUnpair={() => unpair(d.id)}
+            />
+          ))}
+        </ul>
+      )}
 
       {pairing && (
         <PairModal
@@ -148,8 +177,123 @@ export function DevicesPanel({ initialDevices }: { initialDevices: Device[] }) {
           onClose={() => { setPairing(null); refresh(); }}
         />
       )}
-      {pairErr && <p className="text-sm text-red-400">{pairErr}</p>}
+      {pairErr && (
+        <p className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-300">
+          {pairErr}
+        </p>
+      )}
     </section>
+  );
+}
+
+function EmptyHero({ onPair, busy }: { onPair: () => void; busy: boolean }) {
+  return (
+    <div className="mt-6 rounded-3xl border border-neutral-800/80 bg-neutral-900/40 p-8 text-center overflow-hidden relative">
+      <div className="absolute inset-0 bg-brand-wash pointer-events-none" aria-hidden />
+      <div className="relative">
+        <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-950 shadow-[0_0_0_4px_rgb(255_255_255/0.02)]">
+          <Monitor className="size-6 text-sky-400" strokeWidth={1.75} />
+        </div>
+        <h3 className="text-lg font-semibold tracking-tight">No Macs paired yet</h3>
+        <p className="mt-1.5 text-sm text-neutral-500 leading-relaxed">
+          Pair your Mac to watch Claude, cmux terminals,<br />
+          and Chrome tabs from your phone.
+        </p>
+        <button
+          onClick={onPair}
+          disabled={busy}
+          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white text-black text-sm font-semibold py-3 px-5 disabled:opacity-50 active:scale-[0.98] transition"
+        >
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" strokeWidth={2.5} />}
+          Pair a Mac
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DeviceRow({
+  device: d,
+  online,
+  onUnpair,
+}: {
+  device: Device;
+  online: boolean;
+  onUnpair: () => void;
+}) {
+  const relative = useRelative(d.lastSeenAt);
+  const status: "online" | "offline" | "waiting" = !d.paired
+    ? "waiting"
+    : online
+    ? "online"
+    : "offline";
+
+  return (
+    <li className="group relative rounded-2xl bg-neutral-900/60 border border-neutral-800/80 overflow-hidden">
+      <Link
+        href={`/dashboard/${d.id}`}
+        className="block active:bg-neutral-800/40 transition"
+      >
+        <div className="flex items-center gap-3.5 p-4 pr-3">
+          <div className="relative flex-shrink-0">
+            <div className="flex size-11 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-950">
+              <Monitor className="size-5 text-neutral-300" strokeWidth={1.75} />
+            </div>
+            {status === "online" && (
+              <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-400 ring-2 ring-neutral-950 live-dot" />
+            )}
+            {status === "offline" && (
+              <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-neutral-600 ring-2 ring-neutral-950" />
+            )}
+            {status === "waiting" && (
+              <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-amber-400 ring-2 ring-neutral-950 animate-pulse" />
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="font-semibold tracking-tight truncate">{d.name}</p>
+              <StatusPill status={status} />
+            </div>
+            <p className="mt-0.5 text-xs text-neutral-500 truncate">
+              {status === "online"
+                ? "Tap to open sessions, terminals, tabs"
+                : status === "waiting"
+                ? "Waiting to pair"
+                : relative
+                ? `Last seen ${relative}`
+                : d.lastSeenAt
+                ? `Last seen ${formatWhen(d.lastSeenAt)}`
+                : "Never connected"}
+            </p>
+          </div>
+
+          <ChevronRight className="size-5 text-neutral-600 flex-shrink-0" />
+        </div>
+      </Link>
+
+      <button
+        onClick={onUnpair}
+        aria-label="Remove Mac"
+        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 focus:opacity-100 inline-flex items-center justify-center size-8 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-neutral-900 transition"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </li>
+  );
+}
+
+function StatusPill({ status }: { status: "online" | "offline" | "waiting" }) {
+  const map = {
+    online: "bg-emerald-400/10 text-emerald-300 border-emerald-400/20",
+    offline: "bg-neutral-800/60 text-neutral-400 border-neutral-700/60",
+    waiting: "bg-amber-400/10 text-amber-300 border-amber-400/20",
+  } as const;
+  const label = { online: "live", offline: "offline", waiting: "pairing" } as const;
+  return (
+    <span className={`inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-medium uppercase tracking-wide ${map[status]}`}>
+      {label[status]}
+    </span>
   );
 }
 
@@ -167,29 +311,67 @@ function PairModal({ code, expiresAt, onClose }: { code: string; expiresAt: stri
 
   const mm = Math.floor(remaining / 60000);
   const ss = Math.floor((remaining % 60000) / 1000);
+  const expired = remaining === 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center pt-safe pb-safe px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-800 p-6">
-        <h3 className="text-lg font-medium">Pair your Mac</h3>
-        <p className="mt-1 text-sm text-neutral-500">On your Mac, run:</p>
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center pt-safe pb-safe px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-neutral-900 border border-neutral-800 p-6 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold tracking-tight">Pair your Mac</h3>
+            <p className="mt-0.5 text-sm text-neutral-500">Run this on your Mac.</p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex items-center justify-center size-9 rounded-full border border-neutral-800 text-neutral-400 hover:text-neutral-100 active:scale-95 transition"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
         <button
           onClick={() => { navigator.clipboard.writeText(install); setCopied("cmd"); setTimeout(() => setCopied(null), 1500); }}
-          className="mt-3 w-full text-left rounded-xl bg-neutral-950 border border-neutral-800 px-3 py-3 font-mono text-[13px] overflow-x-auto"
+          className="mt-4 w-full text-left group rounded-xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition"
         >
-          {install}
+          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+            <Terminal className="size-3.5 text-neutral-500" />
+            <span className="text-[10px] font-medium uppercase tracking-widest text-neutral-500">install</span>
+            <span className="ml-auto text-[10px] font-medium text-neutral-500 group-hover:text-sky-400">
+              {copied === "cmd" ? "copied" : "tap to copy"}
+            </span>
+          </div>
+          <pre className="px-3 pb-3 font-mono text-[12px] leading-snug text-neutral-200 overflow-x-auto whitespace-pre">{install}</pre>
         </button>
-        <p className="mt-4 text-xs uppercase tracking-widest text-neutral-500">or type the code manually</p>
+
+        <div className="mt-5">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-neutral-500 text-center">or type the code</p>
+          <button
+            onClick={() => { navigator.clipboard.writeText(code); setCopied("code"); setTimeout(() => setCopied(null), 1500); }}
+            className="mt-2 w-full rounded-xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 py-5 font-mono text-3xl tracking-[0.35em] font-medium text-center tabular-nums transition"
+          >
+            {code}
+          </button>
+          <p className={`mt-2 text-xs text-center flex items-center justify-center gap-1.5 ${expired ? "text-red-400" : "text-neutral-500"}`}>
+            {copied === "code" ? (
+              <>
+                <Copy className="size-3" /> copied to clipboard
+              </>
+            ) : expired ? (
+              "Code expired. Close and generate a new one."
+            ) : (
+              <>
+                <span className="size-1.5 rounded-full bg-amber-400 animate-pulse" />
+                expires in <span className="tabular-nums">{mm}:{String(ss).padStart(2, "0")}</span>
+              </>
+            )}
+          </p>
+        </div>
+
         <button
-          onClick={() => { navigator.clipboard.writeText(code); setCopied("code"); setTimeout(() => setCopied(null), 1500); }}
-          className="mt-2 w-full rounded-xl bg-neutral-950 border border-neutral-800 py-4 font-mono text-2xl tracking-[0.3em] text-center"
+          onClick={onClose}
+          className="mt-6 w-full rounded-xl bg-neutral-800 hover:bg-neutral-700 py-3 font-medium active:scale-[0.99] transition"
         >
-          {code}
-        </button>
-        <p className="mt-2 text-xs text-neutral-500 text-center">
-          {copied ? "copied ✓" : remaining === 0 ? "expired" : `expires in ${mm}:${String(ss).padStart(2, "0")}`}
-        </p>
-        <button onClick={onClose} className="mt-6 w-full rounded-xl bg-neutral-800 py-3 font-medium">
           Done
         </button>
       </div>
