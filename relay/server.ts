@@ -93,10 +93,15 @@ httpServer.on("upgrade", async (req, socket, head) => {
 
 function wireBridge(ws: WebSocket, deviceId: string) {
   attachBridge(deviceId, ws);
-  db.update(device).set({ lastSeenAt: new Date() }).where(eq(device.id, deviceId)).catch(() => {});
+  const touch = () => db.update(device).set({ lastSeenAt: new Date() }).where(eq(device.id, deviceId)).catch(() => {});
+  touch();
   console.log(`[relay] bridge connected: ${deviceId}`);
 
+  // Native WS ping every 30s (keeps Cloudflare-in-front from dropping idle WS)
+  // AND touch last_seen every 60s so dashboard's "online" heuristic (< 90s)
+  // stays accurate even for long-lived bridges.
   const hb = setInterval(() => { if (ws.readyState === ws.OPEN) ws.ping(); }, 30_000);
+  const touchTimer = setInterval(touch, 60_000);
 
   ws.on("message", (data) => {
     const raw = data.toString();
@@ -111,6 +116,7 @@ function wireBridge(ws: WebSocket, deviceId: string) {
 
   ws.on("close", () => {
     clearInterval(hb);
+    clearInterval(touchTimer);
     detachBridge(deviceId, ws);
     console.log(`[relay] bridge disconnected: ${deviceId}`);
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronRight,
   Copy,
@@ -73,49 +73,25 @@ export function DevicesPanel({ initialDevices }: { initialDevices: Device[] }) {
     setDevices(data.devices);
   }
 
-  // For each paired device, keep one WebSocket subscription open. When any
-  // device is added/removed, adjust the pool.
-  const socketsRef = useRef<Map<string, WebSocket>>(new Map());
+  // Online detection: relay touches last_seen_at every 60s while bridge is
+  // connected, so anything within ~90s is live. Simpler + correct than the
+  // per-device WS subscription (which needed tickets from a different origin).
   useEffect(() => {
-    const pool = socketsRef.current;
-    const wanted = new Set(devices.filter((d) => d.paired).map((d) => d.id));
-    // Close removed
-    for (const [id, ws] of pool) {
-      if (!wanted.has(id)) {
-        try { ws.close(); } catch {}
-        pool.delete(id);
+    const compute = () => {
+      const now = Date.now();
+      const live = new Set<string>();
+      for (const d of devices) {
+        if (d.paired && d.lastSeenAt && now - new Date(d.lastSeenAt).getTime() < 90_000) {
+          live.add(d.id);
+        }
       }
-    }
-    // Open new
-    for (const id of wanted) {
-      if (pool.has(id)) continue;
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${proto}//${location.host}/api/mobile?device=${encodeURIComponent(id)}`);
-      pool.set(id, ws);
-      ws.addEventListener("message", (e) => {
-        try {
-          const msg = JSON.parse(String(e.data));
-          if (msg.type === "device:online") {
-            setOnlineIds((prev) => new Set(prev).add(id));
-          } else if (msg.type === "device:offline") {
-            setOnlineIds((prev) => {
-              const next = new Set(prev);
-              next.delete(id);
-              return next;
-            });
-          }
-        } catch {}
-      });
-      ws.addEventListener("close", () => {
-        setOnlineIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      });
-    }
-    return () => {};
+      setOnlineIds(live);
+    };
+    compute();
+    const t = setInterval(compute, 10_000);
+    return () => clearInterval(t);
   }, [devices]);
+
 
   async function startPair() {
     setPairErr(null);
